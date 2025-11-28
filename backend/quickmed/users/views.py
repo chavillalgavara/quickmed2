@@ -26,13 +26,14 @@ def signup(request):
 
 
 
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import CustomUser
-from .serializers import SignupSerializer, LoginSerializer
+from .models import CustomUser, VendorProfile
+from .serializers import SignupSerializer, LoginSerializer, VendorProfileSerializer
 
 
 # @api_view(["POST"])
@@ -195,4 +196,47 @@ def login_user(request):
         "phone": user.phone,
         "userType": user.user_type,
     }, status=200)
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def vendor_profile(request):
+    """
+    GET: Retrieve vendor profile
+    PUT: Update vendor profile
+    """
+    # Ensure user is a vendor
+    if request.user.user_type != 'vendor':
+        return Response({"error": "User is not a vendor"}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Debug: Print which user is requesting
+    print(f"Vendor profile request from user: {request.user.email} (ID: {request.user.id})")
+    
+    try:
+        vendor_profile_obj = VendorProfile.objects.get(user=request.user)
+    except VendorProfile.DoesNotExist:
+        # Create profile if it doesn't exist
+        vendor_profile_obj = VendorProfile.objects.create(user=request.user)
+        print(f"Created new vendor profile for user: {request.user.email}")
+    
+    if request.method == "GET":
+        serializer = VendorProfileSerializer(vendor_profile_obj)
+        # Debug: Print the data being returned
+        print(f"Returning vendor profile data for {request.user.email}: {serializer.data}")
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    elif request.method == "PUT":
+        print(f"Received update request with data: {request.data}")
+        serializer = VendorProfileSerializer(vendor_profile_obj, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            # Refresh from database to ensure we have latest data
+            vendor_profile_obj.refresh_from_db()
+            print(f"Profile saved. Current data: pharmacy_name={vendor_profile_obj.pharmacy_name}, license={vendor_profile_obj.license_number}")
+            # Return updated data in frontend format
+            updated_serializer = VendorProfileSerializer(vendor_profile_obj)
+            print(f"Returning updated data: {updated_serializer.data}")
+            return Response(updated_serializer.data, status=status.HTTP_200_OK)
+        print(f"Validation failed: {serializer.errors}")
+        return Response({"error": "Validation failed", "details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
  

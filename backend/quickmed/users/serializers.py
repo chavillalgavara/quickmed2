@@ -88,3 +88,67 @@ class LoginSerializer(serializers.Serializer):
     email = serializers.CharField()
     password = serializers.CharField()
     user_type = serializers.CharField()
+
+
+class VendorProfileSerializer(serializers.ModelSerializer):
+    fullName = serializers.CharField(source='user.full_name', read_only=True)
+    email = serializers.CharField(source='user.email', read_only=True)
+    phone = serializers.CharField(source='user.phone', read_only=True)
+    
+    class Meta:
+        model = VendorProfile
+        fields = [
+            'fullName', 'email', 'phone',
+            'pharmacy_name', 'license_number', 'gst_number',
+            'address', 'city', 'state', 'pincode',
+            'opening_time', 'closing_time'
+        ]
+        
+    def to_representation(self, instance):
+        # Convert snake_case to camelCase for frontend
+        data = super().to_representation(instance)
+        # Handle None/null values - convert to empty string for frontend
+        def safe_get(key, default=''):
+            value = data.get(key, default)
+            return value if value is not None else default
+        
+        return {
+            'fullName': safe_get('fullName', ''),
+            'email': safe_get('email', ''),
+            'phone': safe_get('phone', ''),
+            'pharmacyName': safe_get('pharmacy_name', ''),
+            'licenseNumber': safe_get('license_number', ''),
+            'gstNumber': safe_get('gst_number', ''),
+            'address': safe_get('address', ''),
+            'city': safe_get('city', ''),
+            'state': safe_get('state', ''),
+            'pincode': safe_get('pincode', ''),
+            'openingTime': safe_get('opening_time', ''),
+            'closingTime': safe_get('closing_time', '')
+        }
+    
+    def to_internal_value(self, data):
+        # Convert camelCase to snake_case for backend
+        if not isinstance(data, dict):
+            return super().to_internal_value(data)
+        
+        # Map camelCase keys to snake_case
+        field_mapping = {
+            'pharmacyName': 'pharmacy_name',
+            'licenseNumber': 'license_number',
+            'gstNumber': 'gst_number',
+            'openingTime': 'opening_time',
+            'closingTime': 'closing_time'
+        }
+        
+        # Convert keys - keep address, city, state, pincode as is
+        converted_data = {}
+        for key, value in data.items():
+            if key in field_mapping:
+                converted_data[field_mapping[key]] = value
+            elif key in ['address', 'city', 'state', 'pincode']:
+                converted_data[key] = value
+            # Ignore other keys like fullName, email, phone (read-only)
+        
+        # Call parent to_internal_value for validation
+        return super().to_internal_value(converted_data)

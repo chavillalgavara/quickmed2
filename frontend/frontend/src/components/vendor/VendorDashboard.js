@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import VendorModals from './VendorModals';
 import VendorSidebar from './VendorSidebar';
 import VendorStockManagement from './VendorStockManagement';
@@ -51,20 +51,33 @@ const VendorDashboard = ({ user = defaultUser, onLogout }) => {
     batchNo: ''
   });
 
-  // User profile state
+  // Get user from localStorage if not provided as prop
+  const getUserFromStorage = () => {
+    try {
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedUser) {
+        return JSON.parse(storedUser);
+      }
+    } catch (error) {
+      console.error('Error parsing user from localStorage:', error);
+    }
+    return null;
+  };
+
+  // Initialize user profile state - will be populated from API
   const [userProfile, setUserProfile] = useState({
-    fullName: 'Rajesh Kumar',
-    email: 'rajesh.pharmacy@gmail.com',
-    phone: '9876543210',
-    pharmacyName: 'City Medical Store',
-    licenseNumber: 'PHARM-UP-2024-789',
-    gstNumber: '07AABCU9603R1ZM',
-    address: 'Shop No. 15, Medical Complex, Sector 15',
-    city: 'Noida',
-    state: 'Uttar Pradesh',
-    pincode: '201301',
-    openingTime: '08:00 AM',
-    closingTime: '10:00 PM'
+    fullName: '',
+    email: '',
+    phone: '',
+    pharmacyName: '',
+    licenseNumber: '',
+    gstNumber: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    openingTime: '',
+    closingTime: ''
   });
 
   // Form validation errors
@@ -114,73 +127,74 @@ const VendorDashboard = ({ user = defaultUser, onLogout }) => {
   // Form validation functions
   const validateField = (fieldName, value) => {
     let error = '';
+    const stringValue = value ? String(value).trim() : '';
     
     switch (fieldName) {
       case 'phone':
         const phoneRegex = /^(\+91[\-\s]?)?[0]?(91)?[6789]\d{9}$/;
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'Phone number is required';
-        } else if (!phoneRegex.test(value.replace(/\s/g, ''))) {
+        } else if (!phoneRegex.test(stringValue.replace(/\s/g, ''))) {
           error = 'Please enter a valid Indian phone number';
         }
         break;
         
       case 'pharmacyName':
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'Pharmacy name is required';
-        } else if (value.length < 2) {
+        } else if (stringValue.length < 2) {
           error = 'Pharmacy name must be at least 2 characters long';
         }
         break;
         
       case 'licenseNumber':
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'License number is required';
-        } else if (value.length < 5) {
+        } else if (stringValue.length < 5) {
           error = 'License number must be at least 5 characters long';
         }
         break;
 
       case 'gstNumber':
         const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'GST number is required';
-        } else if (!gstRegex.test(value)) {
+        } else if (!gstRegex.test(stringValue)) {
           error = 'Please enter a valid GST number';
         }
         break;
         
       case 'address':
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'Address is required';
-        } else if (value.length < 10) {
+        } else if (stringValue.length < 10) {
           error = 'Address must be at least 10 characters long';
         }
         break;
         
       case 'city':
         const cityRegex = /^[A-Za-z\s]+$/;
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'City is required';
-        } else if (!cityRegex.test(value)) {
+        } else if (!cityRegex.test(stringValue)) {
           error = 'City should contain only letters and spaces';
         }
         break;
         
       case 'state':
         const stateRegex = /^[A-Za-z\s]+$/;
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'State is required';
-        } else if (!stateRegex.test(value)) {
+        } else if (!stateRegex.test(stringValue)) {
           error = 'State should contain only letters and spaces';
         }
         break;
         
       case 'pincode':
         const pincodeRegex = /^[1-9][0-9]{5}$/;
-        if (!value.trim()) {
+        if (!stringValue) {
           error = 'Pincode is required';
-        } else if (!pincodeRegex.test(value)) {
+        } else if (!pincodeRegex.test(stringValue)) {
           error = 'Please enter a valid 6-digit pincode';
         }
         break;
@@ -214,29 +228,169 @@ const VendorDashboard = ({ user = defaultUser, onLogout }) => {
     return !Object.values(errors).some(error => error);
   };
 
+  // Fetch vendor profile from API - always fetch on mount
+  const fetchVendorProfile = useCallback(async () => {
+    console.log('=== fetchVendorProfile called ===');
+    const token = localStorage.getItem('token');
+    console.log('Token exists:', !!token);
+    
+    // Always get user from localStorage on refresh (more reliable than prop)
+    const currentUser = user || getUserFromStorage();
+    console.log('Current user:', currentUser?.email);
+    
+    if (!token) {
+      console.warn('No token found, cannot fetch profile from API');
+      // Still set basic user info from localStorage
+      if (currentUser) {
+        setUserProfile({
+          fullName: currentUser.fullName || '',
+          email: currentUser.email || '',
+          phone: currentUser.phone || '',
+          pharmacyName: '',
+          licenseNumber: '',
+          gstNumber: '',
+          address: '',
+          city: '',
+          state: '',
+          pincode: '',
+          openingTime: '',
+          closingTime: ''
+        });
+      }
+      return;
+    }
+    
+    // Verify we have a user before fetching
+    if (!currentUser) {
+      console.warn('No user data available, cannot fetch profile');
+      return;
+    }
+    
+    try {
+      console.log('Fetching vendor profile from API...');
+      const response = await fetch('http://127.0.0.1:8000/users/vendor-profile/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log('Profile fetch response status:', response.status);
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      if (response.ok) {
+        const data = JSON.parse(responseText);
+        console.log('Profile data received from API:', data);
+        
+        // Helper function to safely get values (handle null, undefined, empty string)
+        const safeValue = (value, fallback = '') => {
+          if (value === null || value === undefined) return fallback;
+          if (typeof value === 'string' && value.trim() === '') return fallback;
+          return value;
+        };
+        
+        const updatedProfile = {
+          fullName: safeValue(data.fullName, currentUser?.fullName || ''),
+          email: safeValue(data.email, currentUser?.email || ''),
+          phone: safeValue(data.phone, currentUser?.phone || ''),
+          pharmacyName: safeValue(data.pharmacyName, ''),
+          licenseNumber: safeValue(data.licenseNumber, ''),
+          gstNumber: safeValue(data.gstNumber, ''),
+          address: safeValue(data.address, ''),
+          city: safeValue(data.city, ''),
+          state: safeValue(data.state, ''),
+          pincode: safeValue(data.pincode, ''),
+          openingTime: safeValue(data.openingTime, ''),
+          closingTime: safeValue(data.closingTime, '')
+        };
+        
+        console.log('Setting profile state with:', updatedProfile);
+        setUserProfile(updatedProfile);
+        console.log('Profile state updated successfully');
+      } else {
+        console.error('Profile fetch failed with status:', response.status);
+        console.error('Response:', responseText);
+        // If profile doesn't exist yet, initialize with user data
+        if (currentUser) {
+          setUserProfile(prev => ({
+            ...prev,
+            fullName: currentUser.fullName || prev.fullName || '',
+            email: currentUser.email || prev.email || '',
+            phone: currentUser.phone || prev.phone || ''
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching vendor profile:', error);
+      // Fallback to user data if API fails
+      if (currentUser) {
+        setUserProfile(prev => ({
+          ...prev,
+          fullName: currentUser.fullName || prev.fullName || '',
+          email: currentUser.email || prev.email || '',
+          phone: currentUser.phone || prev.phone || ''
+        }));
+      }
+    }
+  }, [user]);
+
   // Initialize state with mock data
   useEffect(() => {
     setStock(initialData.stock);
     setOrders(initialData.orders);
     setPrescriptions(initialData.prescriptions);
+  }, []);
+
+  // Reset profile when user changes (different vendor logs in)
+  // Use a ref to track previous user email to detect changes
+  const prevUserEmailRef = useRef(null);
+  
+  useEffect(() => {
+    const currentUserEmail = user?.email || getUserFromStorage()?.email;
     
-    if (user) {
+    // Only reset if user email actually changed
+    if (currentUserEmail && currentUserEmail !== prevUserEmailRef.current) {
+      console.log('User changed detected! Previous:', prevUserEmailRef.current, 'New:', currentUserEmail);
+      prevUserEmailRef.current = currentUserEmail;
+      
+      // Reset profile to empty state first
       setUserProfile({
-        fullName: user.fullName || 'Rajesh Kumar',
-        email: user.email || 'rajesh.pharmacy@gmail.com',
-        phone: user.phone || '9876543210',
-        pharmacyName: user.pharmacyName || 'City Medical Store',
-        licenseNumber: user.licenseNumber || 'PHARM-UP-2024-789',
-        gstNumber: user.gstNumber || '07AABCU9603R1ZM',
-        address: user.address || 'Shop No. 15, Medical Complex, Sector 15',
-        city: user.city || 'Noida',
-        state: user.state || 'Uttar Pradesh',
-        pincode: user.pincode || '201301',
-        openingTime: user.openingTime || '08:00 AM',
-        closingTime: user.closingTime || '10:00 PM'
+        fullName: '',
+        email: '',
+        phone: '',
+        pharmacyName: '',
+        licenseNumber: '',
+        gstNumber: '',
+        address: '',
+        city: '',
+        state: '',
+        pincode: '',
+        openingTime: '',
+        closingTime: ''
       });
+      
+      // Small delay to ensure state is reset, then fetch new user's profile
+      setTimeout(() => {
+        fetchVendorProfile();
+      }, 200);
+    } else if (currentUserEmail) {
+      // Update ref even if not changed (first load)
+      prevUserEmailRef.current = currentUserEmail;
     }
-  }, [user]);
+  }, [user?.email, fetchVendorProfile]);
+
+  // Fetch vendor profile on mount - ALWAYS run on component mount
+  useEffect(() => {
+    console.log('=== Component mounted, fetching profile ===');
+    // Small delay to ensure localStorage is ready
+    const timer = setTimeout(() => {
+      fetchVendorProfile();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []); // Empty deps - run only on mount
 
   // Real-time prescription updates simulation
   useEffect(() => {
@@ -441,12 +595,95 @@ const VendorDashboard = ({ user = defaultUser, onLogout }) => {
   };
 
   // Profile Management Functions
-  const handleProfileUpdate = () => {
-    if (validateForm()) {
-      console.log('Profile updated:', userProfile);
-      setShowProfileModal(false);
-      setFormErrors({});
-      showNotification('Profile Updated', 'Your profile has been updated successfully');
+  const handleProfileUpdate = async () => {
+    console.log('handleProfileUpdate called', userProfile);
+    
+    // Validate form
+    const isValid = validateForm();
+    console.log('Form validation result:', isValid, formErrors);
+    
+    if (!isValid) {
+      showNotification('Validation Error', 'Please fix all validation errors before updating');
+      return;
+    }
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+      showNotification('Error', 'Please login again');
+      return;
+    }
+    
+    // Prepare data for API
+    const updateData = {
+      pharmacyName: userProfile.pharmacyName || '',
+      licenseNumber: userProfile.licenseNumber || '',
+      gstNumber: userProfile.gstNumber || '',
+      address: userProfile.address || '',
+      city: userProfile.city || '',
+      state: userProfile.state || '',
+      pincode: userProfile.pincode || '',
+      openingTime: userProfile.openingTime || '',
+      closingTime: userProfile.closingTime || ''
+    };
+    
+    console.log('Sending update request:', updateData);
+    
+    try {
+      const response = await fetch('http://127.0.0.1:8000/users/vendor-profile/', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      console.log('Response status:', response.status);
+      
+      if (response.ok) {
+        const updatedData = await response.json();
+        console.log('Profile updated successfully:', updatedData);
+        
+        // Helper function to safely get values
+        const safeValue = (value, fallback = '') => {
+          return (value !== null && value !== undefined && value !== '') ? value : fallback;
+        };
+        
+        // Update userProfile with the response data to ensure consistency
+        const updatedProfile = {
+          fullName: safeValue(updatedData.fullName, userProfile.fullName || ''),
+          email: safeValue(updatedData.email, userProfile.email || ''),
+          phone: safeValue(updatedData.phone, userProfile.phone || ''),
+          pharmacyName: safeValue(updatedData.pharmacyName, ''),
+          licenseNumber: safeValue(updatedData.licenseNumber, ''),
+          gstNumber: safeValue(updatedData.gstNumber, ''),
+          address: safeValue(updatedData.address, ''),
+          city: safeValue(updatedData.city, ''),
+          state: safeValue(updatedData.state, ''),
+          pincode: safeValue(updatedData.pincode, ''),
+          openingTime: safeValue(updatedData.openingTime, ''),
+          closingTime: safeValue(updatedData.closingTime, '')
+        };
+        
+        console.log('Setting updated profile:', updatedProfile);
+        setUserProfile(updatedProfile);
+        setShowProfileModal(false);
+        setFormErrors({});
+        showNotification('Profile Updated', 'Your profile has been updated successfully');
+        
+        // Refetch after a short delay to ensure database is updated
+        setTimeout(() => {
+          console.log('Refetching profile after update...');
+          fetchVendorProfile();
+        }, 1000);
+      } else {
+        const errorData = await response.json();
+        console.error('Update failed:', errorData);
+        showNotification('Update Failed', errorData.error || errorData.detail || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showNotification('Error', 'Failed to update profile. Please try again.');
     }
   };
 
@@ -552,7 +789,25 @@ const VendorDashboard = ({ user = defaultUser, onLogout }) => {
   };
 
   const confirmLogout = () => {
+    // Clear profile data before logout
+    setUserProfile({
+      fullName: '',
+      email: '',
+      phone: '',
+      pharmacyName: '',
+      licenseNumber: '',
+      gstNumber: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      openingTime: '',
+      closingTime: ''
+    });
     setShowLogoutModal(false);
+    // Clear token and user data
+    localStorage.removeItem('token');
+    localStorage.removeItem('currentUser');
     if (onLogout) {
       onLogout();
     }

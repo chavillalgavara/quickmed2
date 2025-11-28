@@ -56,6 +56,18 @@ class UserProfile(models.Model):
 
 class VendorProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    pharmacy_name = models.CharField(max_length=200, blank=True, null=True)
+    license_number = models.CharField(max_length=100, blank=True, null=True)
+    gst_number = models.CharField(max_length=50, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
+    pincode = models.CharField(max_length=10, blank=True, null=True)
+    opening_time = models.CharField(max_length=20, blank=True, null=True)
+    closing_time = models.CharField(max_length=20, blank=True, null=True)
+    
+    def __str__(self):
+        return f"{self.user.full_name} - {self.pharmacy_name or 'No Pharmacy Name'}"
 
 
 class DeliveryProfile(models.Model):

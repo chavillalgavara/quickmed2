@@ -1042,8 +1042,13 @@ const ProfileModal = ({ show, onClose, onUpdate, userProfile, setUserProfile, fo
           </button>
           <button 
             style={primaryButtonStyle}
-            onClick={onUpdate}
-            disabled={Object.keys(formErrors).some(key => formErrors[key])}
+            onClick={(e) => {
+              e.preventDefault();
+              console.log('Update Profile button clicked');
+              if (onUpdate) {
+                onUpdate();
+              }
+            }}
           >
             Update Profile
           </button>

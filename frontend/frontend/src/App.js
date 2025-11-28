@@ -56,7 +56,9 @@ function App() {
   };
 
   const handleLogout = () => {
+    // Clear all user-related data
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('token');
     setCurrentUser(null);
     setCurrentPage('home');
   };

@@ -80,12 +80,12 @@ WSGI_APPLICATION = 'quickmed.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'db1',          # your database name
+        'NAME': 'quickmed2',          # your database name
         'USER': 'postgres',          # default postgres superuser
-        'PASSWORD':'1234', # enter your postgres password
+        'PASSWORD':'12345', # enter your postgres password
         'HOST': 'localhost',
         'PORT': '5432',
-    }
+    } 
 }
 
 # Password validation
