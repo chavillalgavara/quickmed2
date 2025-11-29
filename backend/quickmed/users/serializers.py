@@ -60,7 +60,7 @@
 
 from rest_framework import serializers
 from django.contrib.auth.hashers import make_password
-from .models import CustomUser, UserProfile, VendorProfile, DeliveryProfile, DoctorProfile
+from .models import CustomUser, UserProfile, VendorProfile, DeliveryProfile
 
 
 class SignupSerializer(serializers.ModelSerializer):
@@ -79,6 +79,8 @@ class SignupSerializer(serializers.ModelSerializer):
         elif user.user_type == "delivery":
             DeliveryProfile.objects.create(user=user)
         elif user.user_type == "doctor":
+            # Import here to avoid circular imports
+            from doctor.models import DoctorProfile
             DoctorProfile.objects.create(user=user)
 
         return user

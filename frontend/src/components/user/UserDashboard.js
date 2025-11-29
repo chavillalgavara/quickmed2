@@ -83,6 +83,7 @@ const MainAppointmentComponent = ({ profile, addNotification }) => {
       consultationFee: '1200',
       availableSlots: ['10:00 AM', '11:00 AM', '12:00 PM', '03:00 PM', '04:00 PM', '05:00 PM']
     }
+    
   ]);
 
   const specialties = ['General Physician', 'Pediatrician', 'Cardiologist', 'Dermatologist', 'Orthopedic'];

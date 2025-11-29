@@ -73,6 +73,3 @@ class VendorProfile(models.Model):
 class DeliveryProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
 
-
-class DoctorProfile(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)

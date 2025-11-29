@@ -268,6 +268,12 @@ export const useWindowSize = () => {
   return windowSize;
 };
 
+// Helper function to get profile storage key based on email
+// This ensures each doctor has their own profile storage
+const getProfileKey = (email) => {
+  return email ? `doctorProfile_${email}` : 'doctorProfile';
+};
+
 // Custom Hook for State Management
 export const useDoctorState = (user) => {
   const [activePage, setActivePage] = useState('dashboard');
@@ -294,18 +300,70 @@ export const useDoctorState = (user) => {
     }
   }, [windowSize.width, isSidebarOpen]);
 
-  const [userProfile, setUserProfile] = useState({
-    fullName: user?.fullName || 'Dr. John Doe',
-    email: user?.email || 'doctor@example.com',
-    phone: user?.phone || '+91 98765 43210',
-    specialization: user?.specialization || 'General Physician',
-    licenseNumber: user?.licenseNumber || 'MED-2024-12345',
-    experience: user?.experience || '12 years',
-    hospital: user?.hospital || 'City General Hospital',
-    address: user?.address || 'Medical Complex, Sector 15, Noida',
-    city: user?.city || 'Noida',
-    state: user?.state || 'Uttar Pradesh',
-    pincode: user?.pincode || '201301'
+  // Initialize userProfile from localStorage first, then user prop, then defaults
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      // First priority: Load from localStorage using email-specific key
+      if (user?.email) {
+        const profileKey = getProfileKey(user.email);
+        const savedProfile = localStorage.getItem(profileKey);
+        if (savedProfile) {
+          const parsedProfile = JSON.parse(savedProfile);
+          // Double-check email matches (security check)
+          if (parsedProfile.email === user.email) {
+            return parsedProfile;
+          }
+        }
+      }
+      
+      // Second priority: Use user prop data
+      if (user) {
+        return {
+          fullName: user?.fullName || 'Dr. John Doe',
+          email: user?.email || 'doctor@example.com',
+          phone: user?.phone || '+91 98765 43210',
+          specialization: user?.specialization || 'General Physician',
+          licenseNumber: user?.licenseNumber || 'MED-2024-12345',
+          experience: user?.experience || '12 years',
+          hospital: user?.hospital || 'City General Hospital',
+          address: user?.address || 'Medical Complex, Sector 15, Noida',
+          city: user?.city || 'Noida',
+          state: user?.state || 'Uttar Pradesh',
+          pincode: user?.pincode || '201301'
+        };
+      }
+      
+      // Fallback: Default values
+      return {
+        fullName: 'Dr. John Doe',
+        email: 'doctor@example.com',
+        phone: '+91 98765 43210',
+        specialization: 'General Physician',
+        licenseNumber: 'MED-2024-12345',
+        experience: '12 years',
+        hospital: 'City General Hospital',
+        address: 'Medical Complex, Sector 15, Noida',
+        city: 'Noida',
+        state: 'Uttar Pradesh',
+        pincode: '201301'
+      };
+    } catch (error) {
+      console.error('Error loading doctor profile:', error);
+      // Return default on error
+      return {
+        fullName: user?.fullName || 'Dr. John Doe',
+        email: user?.email || 'doctor@example.com',
+        phone: user?.phone || '+91 98765 43210',
+        specialization: user?.specialization || 'General Physician',
+        licenseNumber: user?.licenseNumber || 'MED-2024-12345',
+        experience: user?.experience || '12 years',
+        hospital: user?.hospital || 'City General Hospital',
+        address: user?.address || 'Medical Complex, Sector 15, Noida',
+        city: user?.city || 'Noida',
+        state: user?.state || 'Uttar Pradesh',
+        pincode: user?.pincode || '201301'
+      };
+    }
   });
 
   const [notifications, setNotifications] = useState([
@@ -348,6 +406,65 @@ export const useDoctorState = (user) => {
   const [patientNotes, setPatientNotes] = useState({});
   const [patientMessages, setPatientMessages] = useState({});
   const [formErrors, setFormErrors] = useState({});
+
+  // Fetch profile from backend API when user logs in
+  useEffect(() => {
+    const fetchProfileFromAPI = async () => {
+      if (!user?.email || user?.userType !== 'doctor') return;
+      
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch('http://127.0.0.1:8000/api/doctor/profile/', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const profileData = await response.json();
+          // Save to localStorage with email-specific key
+          const profileKey = getProfileKey(user.email);
+          localStorage.setItem(profileKey, JSON.stringify(profileData));
+          // Update state with fetched profile
+          setUserProfile(profileData);
+        } else {
+          // If API fails, fall back to localStorage or user prop
+          console.warn('Failed to fetch profile from API, using local data');
+          const profileKey = getProfileKey(user.email);
+          const savedProfile = localStorage.getItem(profileKey);
+          if (savedProfile) {
+            const parsedProfile = JSON.parse(savedProfile);
+            if (parsedProfile.email === user.email) {
+              setUserProfile(parsedProfile);
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching profile from API:', error);
+        // On error, try to use localStorage or user prop
+        try {
+          const profileKey = getProfileKey(user.email);
+          const savedProfile = localStorage.getItem(profileKey);
+          if (savedProfile) {
+            const parsedProfile = JSON.parse(savedProfile);
+            if (parsedProfile.email === user.email) {
+              setUserProfile(parsedProfile);
+              return;
+            }
+          }
+        } catch (localError) {
+          console.error('Error loading from localStorage:', localError);
+        }
+      }
+    };
+
+    fetchProfileFromAPI();
+  }, [user?.email, user?.userType]); // Fetch when user email changes
 
   useEffect(() => {
     // Initialize appointments
@@ -749,11 +866,75 @@ export const useDoctorActions = (state) => {
     }
   };
 
-  const handleProfileUpdate = (updatedProfile) => {
+  const handleProfileUpdate = async (updatedProfile) => {
     if (validateForm(updatedProfile)) {
       setUserProfile(updatedProfile);
       setShowProfileModal(false);
       setFormErrors({});
+      
+      // Save to backend API first
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const response = await fetch('http://127.0.0.1:8000/api/doctor/profile/', {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updatedProfile)
+          });
+
+          if (response.ok) {
+            const savedProfile = await response.json();
+            // Use the saved profile from backend (may have additional fields)
+            updatedProfile = savedProfile;
+          } else {
+            console.warn('Failed to save profile to backend, saving locally only');
+          }
+        }
+      } catch (error) {
+        console.error('Error saving profile to backend:', error);
+        // Continue with localStorage save even if API fails
+      }
+      
+      // Save updated profile to localStorage using email-specific key
+      try {
+        if (updatedProfile.email) {
+          const profileKey = getProfileKey(updatedProfile.email);
+          localStorage.setItem(profileKey, JSON.stringify(updatedProfile));
+        }
+        
+        // Also update currentUser in localStorage to keep it in sync
+        const currentUser = localStorage.getItem('currentUser');
+        if (currentUser) {
+          try {
+            const userData = JSON.parse(currentUser);
+            // Only update if it's the same user
+            if (userData.email === updatedProfile.email) {
+              const updatedUserData = {
+                ...userData,
+                fullName: updatedProfile.fullName,
+                email: updatedProfile.email,
+                phone: updatedProfile.phone,
+                specialization: updatedProfile.specialization,
+                licenseNumber: updatedProfile.licenseNumber,
+                experience: updatedProfile.experience,
+                hospital: updatedProfile.hospital,
+                address: updatedProfile.address,
+                city: updatedProfile.city,
+                state: updatedProfile.state,
+                pincode: updatedProfile.pincode
+              };
+              localStorage.setItem('currentUser', JSON.stringify(updatedUserData));
+            }
+          } catch (error) {
+            console.error('Error updating currentUser in localStorage:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error saving profile to localStorage:', error);
+      }
       
       // Mobile notification
       if (windowSize && windowSize.width <= 768) {

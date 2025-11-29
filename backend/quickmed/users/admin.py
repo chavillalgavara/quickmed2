@@ -42,7 +42,7 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, UserProfile, VendorProfile, DeliveryProfile, DoctorProfile
+from .models import CustomUser, UserProfile, VendorProfile, DeliveryProfile
 
 
 class CustomUserAdmin(UserAdmin):
@@ -70,4 +70,4 @@ admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(UserProfile)
 admin.site.register(VendorProfile)
 admin.site.register(DeliveryProfile)
-admin.site.register(DoctorProfile)
+# Note: DoctorProfile is registered in doctor/admin.py
